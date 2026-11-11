@@ -1,146 +1,87 @@
-# 财报智析：上市公司年报财务分析流水线
+# 上市公司年报财务分析流水线
 
-> Annual Report Financial Analyzer  
-> 从上市公司年报 PDF 到财务指标、勾稽校验、风险告警与 LLM 归因报告的一站式流水线。
+面向上市公司年度报告的 Python 财务分析流水线——从 PDF 年报自动提取合并三大报表、科目标准化、单位换算、报告期识别、指标计算、会计勾稽校验、规则引擎风险识别，并可调用 DeepSeek 生成专项分析报告。
 
-## 项目简介
+## 功能特性
 
-本项目面向上市公司年度报告分析场景，基于 Python 与 pdfplumber，从年报 PDF 中自动提取合并资产负债表、合并利润表、合并现金流量表，并完成科目映射、单位统一、报告期识别与多报告拼接。系统进一步计算核心财务指标，执行会计勾稽校验，结合规则引擎识别异常并评估风险等级，同时提取审计意见、非经常性损益、现金分红等关键信息，调用 DeepSeek 大模型生成专项归因分析，最终输出 CSV、JSON 与 Markdown 结构化结果。
+- **三大报表提取**：用 `pdfplumber` 从年报 PDF 提取合并资产负债表、合并利润表、合并现金流量表，保留页码作为证据。
+- **科目标准化与单位换算**：基于 `mapping/subject_map.csv` 映射标准科目，自动识别千元/万元/百万元/亿元并统一换算为元；支持报告期识别与多报告拼接。
+- **核心指标计算**：偿债、营运、盈利、成长、现金流质量五大类指标（流动比率、资产负债率、周转率、毛利率、净利率、ROE、增长率等）。
+- **会计勾稽校验**：资产负债表平衡、营业利润、净利润、现金净增加、未分配利润等。
+- **规则引擎风险识别**：审计意见、退市风险、非经常性损益依赖、利润与现金流背离等告警，并给出整体风险等级。
+- **关键信息提取**：审计意见、非经常性损益、现金分红、总股本、合并范围变化等。
+- **大模型专项报告**：调用 DeepSeek 生成归因分析（`step5_llm_report.py`）。
+- **结构化输出**：按报告输出到 `output/<报告名>/`，含 CSV、JSON 与 Markdown（原始提取、标准化数据、指标结果、异常清单、证据链、分析报告、结构化基准包）。
 
-## 主要功能
-
-- **报表提取**：从年报 PDF 提取合并资产负债表、合并利润表、合并现金流量表。
-- **科目标准化**：基于 `mapping/subject_map.csv` 将原始科目映射为标准科目。
-- **单位统一**：自动识别千元、万元、百万元、亿元并统一换算为元。
-- **多报告拼接**：支持多份报告批处理，并补充上一年期初数据。
-- **指标计算**：流动比率、资产负债率、周转率、毛利率、净利率、ROE、增长率等。
-- **勾稽校验**：资产负债表平衡、营业利润、净利润、现金净增加、未分配利润等。
-- **规则引擎**：审计意见、退市风险、非经常性损益依赖、利润与现金流背离等告警。
-- **LLM 归因报告**：调用 DeepSeek 生成专项归因分析。
-- **结构化输出**：输出原始提取、标准化数据、指标结果、异常清单、证据链、Markdown 报告与结构化基准包。
-
-## 环境要求
+## 技术栈 / 依赖
 
 - Python 3.10+
-- 依赖见 `requirements.txt`
+- `pandas>=2.0`、`pdfplumber>=0.10`、`openai>=1.30`、`fpdf2>=2.7`（见 `requirements.txt`）
+- 可选：DeepSeek API（兼容 OpenAI 协议的 LLM 归因分析，仅在配置密钥后启用）
 
-## 安装
+## 目录结构
+
+```text
+annual-report-financial-analyzer/
+├── main.py                       # 总入口：多报告批处理，串联各 step
+├── config.py                     # 路径、API、阈值；含极简 .env 加载器
+├── company_meta.py               # 公司/行业元数据解析
+├── debug_map.py                  # 科目映射覆盖情况检查
+├── extract_financial_datav2.py   # 三大报表提取
+├── extract_key_info.py           # 关键信息（审计意见、分红等）提取
+├── step1_extract.py              # 步骤一：PDF 提取
+├── step2_standardize.py          # 步骤二：科目标准化、单位换算、报告拼接
+├── step3_indicators.py           # 步骤三：指标计算与勾稽校验
+├── step4_rules.py                # 步骤四：规则引擎异常扫描
+├── step5_llm_report.py           # 步骤五：DeepSeek 归因报告（需 API Key）
+├── step6_structured.py           # 步骤六：风险汇总与结构化输出
+├── requirements.txt
+├── .gitignore
+├── LICENSE                       # MIT
+├── README.md
+├── files/                        # 待分析的年报 PDF 样本（7 份）
+├── mapping/                      # 科目与行业映射 CSV
+│   ├── subject_map.csv
+│   ├── company_meta.csv
+│   ├── industry_keywords.csv
+│   └── industry_profile.csv
+└── output/                       # 结果：CSV / JSON / MD / PDF（按报告分目录）
+```
+
+## 快速开始
+
+1. 克隆与安装依赖：
 
 ```bash
-git clone https://github.com/your-name/annual-report-financial-analyzer.git
+git clone https://github.com/RockyproJiang/annual-report-financial-analyzer.git
 cd annual-report-financial-analyzer
-
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
 pip install -r requirements.txt
 ```
 
-## 配置
+2. 将待分析的年报 PDF 放入 `files/` 目录。
 
-1. 将年报 PDF 放入 `files/` 目录。
-2. 检查 `mapping/` 下的映射文件：
-   - `subject_map.csv`
-   - `company_meta.csv`
-   - `industry_keywords.csv`
-   - `industry_profile.csv`
-3. 配置 DeepSeek API Key。推荐使用环境变量，不要写入代码：
-
-```bash
-# macOS / Linux
-export DEEPSEEK_API_KEY="your-api-key"
-
-# Windows PowerShell
-$env:DEEPSEEK_API_KEY="your-api-key"
-```
-
-并在 `config.py` 中改为：
-
-```python
-import os
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-```
-
-也可以根据需要调整：
-
-```python
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-v4-flash"
-```
-
-## 运行
+3. 运行流水线（总入口会按 step 顺序处理 `files/` 下所有报告并输出到 `output/`）：
 
 ```bash
 python main.py
 ```
 
-如需单独检查映射覆盖情况：
+可先用 `python debug_map.py "贵州茅台：2025年年度报告"` 单独检查科目映射覆盖情况；也可按 `step1_extract.py` → `step6_structured.py` 的顺序逐步调试。
+
+## 配置与安全说明
+
+- **API Key 处理方式**：调用大模型的归因分析需要设置环境变量 `DEEPSEEK_API_KEY`。`config.py` 第 71 行为 `DEEPSEEK_API_KEY = _env_str("DEEPSEEK_API_KEY", "")`，即**空默认值、不硬编码任何密钥**；未配置时 `step5` 的 LLM 环节不可用，但其余步骤正常运行。`config.py` 自带一个不依赖第三方库的极简 `.env` 加载器（`_load_dotenv`），会读取项目根目录的 `.env` 且不覆盖已有环境变量。
+- **仓库中不含任何真实 API Key**。请勿把密钥写进代码或提交到 Git；配置时只使用明显占位值，例如在项目根目录 `.env` 中写：
 
 ```bash
-python debug_map.py "贵州茅台：2025年年度报告"
+DEEPSEEK_API_KEY=sk-xxx
 ```
 
-## 输出目录
+  或在 shell 中 `export DEEPSEEK_API_KEY=你的密钥`。请确认 `.gitignore` 已忽略 `.env`（当前已包含 `.env` 与 `.env.*`）。`DEEPSEEK_BASE_URL`（默认 `https://api.deepseek.com`）与 `DEEPSEEK_MODEL` 同样可通过环境变量覆盖。
+- `files/` 内年报 PDF 与 `output/` 内结果仅作样本与演示，注意不得包含敏感内部资料；年报可能涉及版权，请勿随意公开上传。
+- 已清理误提交的 `__pycache__/*.pyc` 并补充 `.gitignore`（忽略 `__pycache__/`、`*.py[cod]`、`.env` 等），避免缓存与密钥入库。
+- 本项目输出仅供学习、研究与辅助分析，不构成投资建议；LLM 生成内容须人工复核。
 
-每份报告会在 `output/<报告名>/` 下生成：
+## 许可证
 
-| 文件 | 说明 |
-|---|---|
-| `01_原始提取.csv` | PDF 原始提取结果 |
-| `01_审计汇总.csv` | 提取审计汇总 |
-| `01_错误日志.csv` | 提取错误日志 |
-| `01_关键信息.csv` | 审计意见、行业、分红等 |
-| `02_标准化数据.csv` | 科目标准化后的数据 |
-| `03_指标结果.csv` | 财务指标计算结果 |
-| `04_异常清单.csv` | 规则引擎异常告警 |
-| `05_证据链.json` | 科目证据与指标证据 |
-| `06_分析报告.md` | 最终 Markdown 分析报告 |
-| `07_结构化基准包.json` | 结构化输出总包 |
-| `07-1_基础信息.csv` | 基础信息 |
-| `07-2_指标计算结果.csv` | 指标计算结果 |
-| `07-3_指标异常结果.csv` | 指标异常结果 |
-| `07-4_勾稽校验结果.csv` | 勾稽校验结果 |
-| `07-5_汇总风险.csv` | 汇总风险 |
-
-## 项目结构
-
-```text
-.
-├── main.py
-├── config.py
-├── company_meta.py
-├── debug_map.py
-├── extract_financial_datav2.py
-├── extract_key_info.py
-├── step1_extract.py
-├── step2_standardize.py
-├── step3_indicators.py
-├── step4_rules.py
-├── step5_llm_report.py
-├── step6_structured.py
-├── requirements.txt
-├── mapping/
-│   ├── subject_map.csv
-│   ├── company_meta.csv
-│   ├── industry_keywords.csv
-│   └── industry_profile.csv
-├── files/
-│   └── .gitkeep
-└── output/
-    └── .gitkeep
-```
-
-## 注意事项
-
-- 本项目输出仅供学习、研究与辅助分析，不构成投资建议。
-- LLM 生成内容可能存在偏差，必须人工复核。
-- 年报 PDF 可能涉及版权，请勿随意公开上传。
-- 请勿将 API Key、密码等敏感信息提交到 Git 仓库。
-- 首次运行前建议先用 `debug_map.py` 检查科目映射覆盖情况。
-
-## License
-
-MIT License. 详见 `LICENSE`。
+本项目采用 MIT License，详见 `LICENSE`（Copyright (c) 2026 Rocky）。
